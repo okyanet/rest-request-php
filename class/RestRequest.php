@@ -26,6 +26,7 @@ class RestRequest
     $this->accessToken    = null;
     $this->acceptType     = 'application/vnd.api+json';
     $this->contentType    = 'application/vnd.api+json';
+    $this->responseHeader = null;
     $this->responseBody   = null;
     $this->responseInfo   = null;
 
@@ -40,6 +41,7 @@ class RestRequest
     $this->requestBody    = null;
     $this->requestLength  = 0;
     $this->verb           = 'GET';
+    $this->responseHeader = null;
     $this->responseBody   = null;
     $this->responseInfo   = null;
   }
@@ -144,10 +146,27 @@ class RestRequest
   protected function doExecute (&$curlHandle)
   {
     $this->setCurlOpts($curlHandle);
-    $this->responseBody = curl_exec($curlHandle);
+    $response = curl_exec($curlHandle);
+    $headerSize = curl_getinfo($curlHandle, CURLINFO_HEADER_SIZE);
+    $header = substr($response, 0, $headerSize);
+    $this->responseHeader = $this->parseResponseHeaders($header);
+    $this->responseBody = substr($response, $headerSize);
     $this->responseInfo = curl_getinfo($curlHandle);
 
     curl_close($curlHandle);
+  }
+
+  protected function parseResponseHeaders (&$headers)
+  {
+    $parsedHeaders = array();
+    foreach (explode("\n", $headers) as $header) {
+      $header = explode(': ', $header);
+      if (count($header) > 1) {
+        $parsedHeaders[$header[0]] = $header[1];
+      }
+    }
+
+    return $parsedHeaders;
   }
 
   protected function setCurlOpts (&$curlHandle)
@@ -160,6 +179,7 @@ class RestRequest
       'Content-Type: ' . $this->contentType,
       'Authorization: Bearer ' . $this->accessToken
     ));
+    curl_setopt($curlHandle, CURLOPT_HEADER, true);
     curl_setopt($curlHandle, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($curlHandle, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($curlHandle, CURLOPT_CAINFO, dirname(__FILE__).'/cacert.pem');
@@ -173,6 +193,11 @@ class RestRequest
   public function setAcceptType ($acceptType)
   {
     $this->acceptType = $acceptType;
+  }
+
+  public function getResponseHeaders()
+  {
+    return $this->responseHeader;
   }
 
   public function getResponseBody ()
